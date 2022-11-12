@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Caltrain Sucks</title>
+<style>
+body {
+  background: dimgray;
+  color: white;
+  font-family: Arial, sans-serif;
+  margin-left: 0px;
+  margin-right: 0px;
+  margin-top: 0px;
+}
+table {
+  border-collapse: collapse;
+  display: block;
+  overflow: auto;
+}
+tr {
+  border-bottom: 1pt solid #aaa;
+}
+td {
+  padding-top: 0.4em;
+  padding-bottom: 0.4em;
+}
+select {
+  background: black;
+  color: white;
+  font-weight: bold;
+  border-radius: 0.25em;
+  border-color: #999999;
+  padding: 0.25em;
+}
+button, input[type=number] {
+  background: black;
+  color: white;
+  font-weight: bold;
+  border-width: 1px;
+  border-radius: 0.25em;
+  border-color: #999999;
+  padding: 0.25em;
+}
+td.depart, td.arrive {
+  font-weight: bold;
+}
+td.depart {
+  padding-left: 0.5em;
+}
+td.duration {
+  padding-right: 1em;
+}
+td.route {
+  padding-left: 5em;
+  padding-right: 3em;
+}
+td.leave {
+  padding-left: 0.75em;
+  font-size: 80%;
+}
+#header {
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
+  background: #333333;
+  overflow: hidden;
+  white-space: nowrap;
+}
+#source {
+  margin-left: 1em;
+  margin-right: 1em;
+}
+#dest {
+  margin-right: 0.5em;
+}
+#travel_time {
+  width: 2em;
+}
+.travel_ok {
+  background: DarkOliveGreen;
+}
+.travel_late {
+  background: DarkKhaki;
+}
+.speed_fast {
+  color: LightPink;
+}
+</style>
+</head>
+<body>
+<div id=header>
+<span id="main"></span>
+<button type="button" id="reverse">&rlarr;</button>
+<input type="number" id="travel_time" name="travel_time" min="0" max="59" value="5">
+</div>
+<table id="schedule"></table>
+<script>
+// TODO: time to leave notifications, weekend schedule, full width table, highlight colors
+  document.addEventListener("DOMContentLoaded", function(event) {
+    document.getElementById('reverse').addEventListener("click", reverse);
+    document.getElementById('travel_time').addEventListener("change", travelTimeChanged);
+
+    var sc = document.getElementById('schedule');
+    sc.style.height = (window.innerHeight - sc.offsetTop - 10).toString() + "px";
+
+    setInterval(updateNext, 60000);
+  });
+
+  fetch('schedule.json')
+  .then(function(response) {
+    return response.json();
+  })
+  .then(function(schedule) {
+    var src = document.createElement("select");
+    src.id = 'source';
+    src.addEventListener("change", stationChanged.bind(null, schedule));
+    schedule.northbound.stations.forEach(function(station) {
+      src.innerHTML += '<option value="'+station+'">'+station+'</option>';
+    });
+
+    var dest = document.createElement("select");
+    dest.id = 'dest';
+    dest.addEventListener("change", stationChanged.bind(null, schedule));
+    schedule.northbound.stations.forEach(function(station) {
+      dest.innerHTML += '<option value="'+station+'">'+station+'</option>';
+    });
+
+    var f = document.getElementById('main');
+    f.appendChild(src);
+    f.appendChild(dest);
+
+    var cookies = getCookies();
+    if (cookies.src) {
+      src.value = cookies.src;
+    }
+    if (cookies.dest) {
+      dest.value = cookies.dest;
+    }
+    if (cookies[`tt_${src.value}`]) {
+      document.getElementById('travel_time').value = cookies[`tt_${src.value}`];
+    }
+    if (cookies.src || cookies.dest) {
+      src.dispatchEvent(new Event('change'));
+    }
+  });
+
+  function travelTimeChanged() {
+    updateNext();
+    viewNext();
+
+    var src = document.getElementById('source').value;
+    var t = document.getElementById('travel_time').value;
+    document.cookie = `tt_${src}=${t}; expires=Tue, 31 Dec 2024 12:00:00 UTC`;
+  }
+
+  function reverse() {
+    var src = document.getElementById('source');
+    var dv = document.getElementById('dest').value;
+    document.getElementById('dest').value = src.value;
+    document.getElementById('source').value = dv;
+    src.dispatchEvent(new Event('change'));
+
+    var tt = document.getElementById('travel_time');
+    var cookies = getCookies();
+    if (cookies[`tt_${src.value}`]) {
+      document.getElementById('travel_time').value = cookies[`tt_${src.value}`];
+    }
+    //tt.dispatchEvent(new Event('change'));
+  }
+
+  function stationChanged(schedule) {
+    var src = document.getElementById('source').value;
+    var dest = document.getElementById('dest').value;
+    if (src == dest) {
+        document.getElementById('schedule').innerHTML = 'choose two different stations';
+        return;
+    }
+    var svctype = 'weekday';
+
+    var dir = direction(schedule, src, dest);
+    var s = schedule[dir];
+    var srcschedule = station_schedule(schedule, dir, src);
+    var destschedule = station_schedule(schedule, dir, dest);
+    var srctrains = trains(s.trains, srcschedule);
+    var desttrains = trains(s.trains, destschedule);
+    var routes = srctrains.filter(value => desttrains.includes(value));
+
+    var results = [];
+    routes.forEach(function(r) {
+      var idx = s.trains.indexOf(r);
+      if (s.service_type[idx] != svctype) {
+        return;
+      }
+      results.push({'route': r, 'depart': srcschedule.times[idx], 'arrive': destschedule.times[idx]});
+    });
+    results.sort(byArrival);
+
+    table = document.getElementById('schedule');
+    //var html = '<thead><tr><td>leave</td><td>departs</td><td>arrives</td><td>train</td><td>duration</td></tr></thead><tbody>';
+    var html = '<tbody>';
+    results.forEach(function(r) {
+      html += `<tr><td class="leave"></td><td class="depart" data-depart-time=${r.depart}>${format_time(r.depart)}</td><td class="arrive">${format_time(r.arrive)}</td><td class="${route_type(r.route)} route">#${r.route}</td><td class="duration" data-duration=${Math.abs(r.depart-r.arrive)}>${duration(r.depart-r.arrive)}</td></tr>`;
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+
+    var cookies = getCookies();
+    if (cookies[`tt_${src}`]) {
+      document.getElementById('travel_time').value = cookies[`tt_${src}`];
+    }
+    document.cookie = `src=${src}; expires=Tue, 31 Dec 2024 12:00:00 UTC`;
+    document.cookie = `dest=${dest}; expires=Tue, 31 Dec 2024 12:00:00 UTC`;
+
+    updateNext();
+    viewNext();
+    highlightFast();
+  }
+
+  function byArrival(a, b) {
+    return (a.arrive < b.arrive) ? -1 : 1;
+  }
+
+  function stations(schedule) {
+    var stations = [];
+    schedule.northbound.schedule.forEach(function(s) {
+      stations.push(s.station);
+    });
+    return stations;
+  }
+
+  function direction(schedule, src, dest) {
+    var st = stations(schedule);
+    var srcidx = st.indexOf(src);
+    var destidx = st.indexOf(dest);
+    return (srcidx < destidx ? 'northbound' : 'southbound')
+  }
+
+  function station_schedule(schedule, dir, st) {
+    for (var i = 0; i < schedule[dir].schedule.length; i++) {
+      if (schedule[dir].schedule[i].station == st) {
+        return schedule[dir].schedule[i];
+      }
+    }
+  }
+
+  function trains(t, st) {
+    var out = [];
+    st.times.forEach(function(x, i) {
+      if (x !== null) {
+        out.push(t[i]);
+      }
+    });
+    return out;
+  }
+
+  function duration(secs) {
+    var mins = Math.abs(secs) / 60;
+    var m = (mins % 60).toString().padStart(2, "0");
+    var h = (mins - m) / 60;
+    return `${h}:${m}`;
+  }
+
+  function dur(secs) {
+    var mins = Math.abs(secs) / 60;
+    var m = (mins % 60);
+    var h = (mins - m) / 60;
+    if (h == 0) {
+      return `${m}m`;
+    }
+    return `>${h}h`;
+  }
+
+  function format_time(secs) {
+    var noon = 86400 / 2;
+    var hours = Math.floor(secs / 3600);
+    var mins = ((secs - (hours * 3600)) / 60).toString().padStart(2, "0");
+    var ampm = (secs >= noon) ? 'pm' : 'am';
+    if (secs >= 86400) {
+        ampm = 'am';
+    }
+    if (hours > 12) {
+        hours -= 12;
+    }
+    if (hours == 0) {
+        hours = 12
+    }
+    return `${hours}:${mins}${ampm}`;
+  }
+
+  function route_type(r) {
+    var f = parseInt(r[0]);
+    if (f >= 7) {
+      return 'route-express';
+    } else if (f >= 2) {
+      return 'route-limited';
+    }
+    return 'route-local';
+  }
+
+  function getCookies() {
+    return document.cookie.split(";")
+      .map(function(cookieString) {
+        return cookieString.trim().split("=");
+      })
+      .reduce(function(acc, curr) {
+        acc[curr[0]] = curr[1];
+        return acc;
+      }, {});
+  }
+
+  function viewNext() {
+    var el = document.getElementsByClassName('travel_ok');
+    if (el.length > 0) {
+      el[0].scrollIntoView();
+    }
+  }
+
+  function updateNext() {
+    const leaveCol = 0;
+    const deptCol = 1;
+    var now = new Date();
+    var now_secs = now.getHours() * 3600 + now.getMinutes() * 60;
+
+    travelTime = document.getElementById('travel_time').value * 60;
+
+    table = document.getElementById('schedule');
+    rows = table.querySelector('tbody').querySelectorAll('tr');
+
+    var count = 0;
+    for(const r of rows) {
+      dt = parseInt(r.childNodes[deptCol].getAttribute('data-depart-time'));
+      if (now_secs + travelTime < dt) {
+        if (count == 0) {
+          r.classList.add('travel_ok');
+          r.classList.remove('travel_past');
+          r.classList.remove('travel_late');
+        }
+        r.childNodes[leaveCol].innerHTML = dur(dt - (now_secs + travelTime));
+        count++;
+        if (count == 3) {
+          break;
+        }
+      } else if (now_secs < dt) {
+        r.classList.remove('travel_ok');
+        r.classList.remove('travel_past');
+        r.classList.add('travel_late');
+        r.childNodes[leaveCol].innerHTML = '';
+      } else {
+        r.classList.remove('travel_ok');
+        r.classList.add('travel_past');
+        r.classList.remove('travel_late');
+        r.childNodes[leaveCol].innerHTML = '';
+      }
+    }
+  }
+
+  function highlightFast() {
+    const durCol = 4;
+    table = document.getElementById('schedule');
+    rows = table.querySelector('tbody').querySelectorAll('tr');
+    var durations = [];
+    for (const r of rows) {
+      durations.push(parseInt(r.childNodes[durCol].getAttribute('data-duration')));
+    }
+    var fast = quantile(durations, 0.3);
+    for (const r of rows) {
+      if (parseInt(r.childNodes[durCol].getAttribute('data-duration')) <= fast) {
+        r.childNodes[durCol].classList.add('speed_fast');
+      }
+    }
+  }
+
+const asc = arr => arr.sort((a, b) => a - b);
+
+  function quantile(arr, q) {
+    const sorted = asc(arr);
+    const pos = (sorted.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (sorted[base + 1] !== undefined) {
+        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    } else {
+        return sorted[base];
+    }
+  }
+
+</script>
+</body>
+</html>
