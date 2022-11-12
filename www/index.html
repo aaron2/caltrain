@@ -95,12 +95,12 @@ td.leave {
 </div>
 <table id="schedule"></table>
 <script>
-// TODO: time to leave notifications, weekend schedule, full width table, highlight colors
+// TODO: time to leave notifications, weekend schedule, full width table, better looking highlight colors
   document.addEventListener("DOMContentLoaded", function(event) {
     document.getElementById('reverse').addEventListener("click", reverse);
     document.getElementById('travel_time').addEventListener("change", travelTimeChanged);
 
-    var sc = document.getElementById('schedule');
+    const sc = document.getElementById('schedule');
     sc.style.height = (window.innerHeight - sc.offsetTop - 10).toString() + "px";
 
     setInterval(updateNext, 60000);
@@ -111,25 +111,25 @@ td.leave {
     return response.json();
   })
   .then(function(schedule) {
-    var src = document.createElement("select");
+    const src = document.createElement("select");
     src.id = 'source';
     src.addEventListener("change", stationChanged.bind(null, schedule));
     schedule.northbound.stations.forEach(function(station) {
       src.innerHTML += '<option value="'+station+'">'+station+'</option>';
     });
 
-    var dest = document.createElement("select");
+    const dest = document.createElement("select");
     dest.id = 'dest';
     dest.addEventListener("change", stationChanged.bind(null, schedule));
     schedule.northbound.stations.forEach(function(station) {
       dest.innerHTML += '<option value="'+station+'">'+station+'</option>';
     });
 
-    var f = document.getElementById('main');
+    const f = document.getElementById('main');
     f.appendChild(src);
     f.appendChild(dest);
 
-    var cookies = getCookies();
+    const cookies = getCookies();
     if (cookies.src) {
       src.value = cookies.src;
     }
@@ -148,46 +148,46 @@ td.leave {
     updateNext();
     viewNext();
 
-    var src = document.getElementById('source').value;
-    var t = document.getElementById('travel_time').value;
+    const src = document.getElementById('source').value;
+    const t = document.getElementById('travel_time').value;
     document.cookie = `tt_${src}=${t}; expires=Tue, 31 Dec 2024 12:00:00 UTC`;
   }
 
   function reverse() {
-    var src = document.getElementById('source');
-    var dv = document.getElementById('dest').value;
+    const src = document.getElementById('source');
+    const dv = document.getElementById('dest').value;
     document.getElementById('dest').value = src.value;
     document.getElementById('source').value = dv;
-    src.dispatchEvent(new Event('change'));
 
-    var tt = document.getElementById('travel_time');
-    var cookies = getCookies();
+    const tt = document.getElementById('travel_time');
+    const cookies = getCookies();
     if (cookies[`tt_${src.value}`]) {
       document.getElementById('travel_time').value = cookies[`tt_${src.value}`];
     }
-    //tt.dispatchEvent(new Event('change'));
+
+    src.dispatchEvent(new Event('change'));
   }
 
   function stationChanged(schedule) {
-    var src = document.getElementById('source').value;
-    var dest = document.getElementById('dest').value;
+    const src = document.getElementById('source').value;
+    const dest = document.getElementById('dest').value;
     if (src == dest) {
         document.getElementById('schedule').innerHTML = 'choose two different stations';
         return;
     }
-    var svctype = 'weekday';
+    const svctype = 'weekday';
 
-    var dir = direction(schedule, src, dest);
-    var s = schedule[dir];
-    var srcschedule = station_schedule(schedule, dir, src);
-    var destschedule = station_schedule(schedule, dir, dest);
-    var srctrains = trains(s.trains, srcschedule);
-    var desttrains = trains(s.trains, destschedule);
-    var routes = srctrains.filter(value => desttrains.includes(value));
+    const dir = direction(schedule, src, dest);
+    const s = schedule[dir];
+    const srcschedule = station_schedule(schedule, dir, src);
+    const destschedule = station_schedule(schedule, dir, dest);
+    const srctrains = trains(s.trains, srcschedule);
+    const desttrains = trains(s.trains, destschedule);
+    const routes = srctrains.filter(value => desttrains.includes(value));
 
-    var results = [];
+    let results = [];
     routes.forEach(function(r) {
-      var idx = s.trains.indexOf(r);
+      const idx = s.trains.indexOf(r);
       if (s.service_type[idx] != svctype) {
         return;
       }
@@ -195,16 +195,16 @@ td.leave {
     });
     results.sort(byArrival);
 
-    table = document.getElementById('schedule');
-    //var html = '<thead><tr><td>leave</td><td>departs</td><td>arrives</td><td>train</td><td>duration</td></tr></thead><tbody>';
-    var html = '<tbody>';
+    const table = document.getElementById('schedule');
+    //let html = '<thead><tr><td>leave</td><td>departs</td><td>arrives</td><td>train</td><td>duration</td></tr></thead><tbody>';
+    let html = '<tbody>';
     results.forEach(function(r) {
       html += `<tr><td class="leave"></td><td class="depart" data-depart-time=${r.depart}>${format_time(r.depart)}</td><td class="arrive">${format_time(r.arrive)}</td><td class="${route_type(r.route)} route">#${r.route}</td><td class="duration" data-duration=${Math.abs(r.depart-r.arrive)}>${duration(r.depart-r.arrive)}</td></tr>`;
     });
     html += '</tbody>';
     table.innerHTML = html;
 
-    var cookies = getCookies();
+    const cookies = getCookies();
     if (cookies[`tt_${src}`]) {
       document.getElementById('travel_time').value = cookies[`tt_${src}`];
     }
@@ -221,7 +221,7 @@ td.leave {
   }
 
   function stations(schedule) {
-    var stations = [];
+    let stations = [];
     schedule.northbound.schedule.forEach(function(s) {
       stations.push(s.station);
     });
@@ -229,14 +229,12 @@ td.leave {
   }
 
   function direction(schedule, src, dest) {
-    var st = stations(schedule);
-    var srcidx = st.indexOf(src);
-    var destidx = st.indexOf(dest);
-    return (srcidx < destidx ? 'northbound' : 'southbound')
+    const st = stations(schedule);
+    return (st.indexOf(src) < st.indexOf(dest) ? 'northbound' : 'southbound')
   }
 
   function station_schedule(schedule, dir, st) {
-    for (var i = 0; i < schedule[dir].schedule.length; i++) {
+    for (let i = 0; i < schedule[dir].schedule.length; i++) {
       if (schedule[dir].schedule[i].station == st) {
         return schedule[dir].schedule[i];
       }
@@ -244,7 +242,7 @@ td.leave {
   }
 
   function trains(t, st) {
-    var out = [];
+    let out = [];
     st.times.forEach(function(x, i) {
       if (x !== null) {
         out.push(t[i]);
@@ -254,16 +252,16 @@ td.leave {
   }
 
   function duration(secs) {
-    var mins = Math.abs(secs) / 60;
-    var m = (mins % 60).toString().padStart(2, "0");
-    var h = (mins - m) / 60;
+    const mins = Math.abs(secs) / 60;
+    const m = (mins % 60).toString().padStart(2, "0");
+    const h = (mins - m) / 60;
     return `${h}:${m}`;
   }
 
   function dur(secs) {
-    var mins = Math.abs(secs) / 60;
-    var m = (mins % 60);
-    var h = (mins - m) / 60;
+    const mins = Math.abs(secs) / 60;
+    const m = (mins % 60);
+    const h = (mins - m) / 60;
     if (h == 0) {
       return `${m}m`;
     }
@@ -271,10 +269,10 @@ td.leave {
   }
 
   function format_time(secs) {
-    var noon = 86400 / 2;
-    var hours = Math.floor(secs / 3600);
-    var mins = ((secs - (hours * 3600)) / 60).toString().padStart(2, "0");
-    var ampm = (secs >= noon) ? 'pm' : 'am';
+    const noon = 86400 / 2;
+    let hours = Math.floor(secs / 3600);
+    const mins = ((secs - (hours * 3600)) / 60).toString().padStart(2, "0");
+    let ampm = (secs >= noon) ? 'pm' : 'am';
     if (secs >= 86400) {
         ampm = 'am';
     }
@@ -288,7 +286,7 @@ td.leave {
   }
 
   function route_type(r) {
-    var f = parseInt(r[0]);
+    const f = parseInt(r[0]);
     if (f >= 7) {
       return 'route-express';
     } else if (f >= 2) {
@@ -309,7 +307,7 @@ td.leave {
   }
 
   function viewNext() {
-    var el = document.getElementsByClassName('travel_ok');
+    const el = document.getElementsByClassName('travel_ok');
     if (el.length > 0) {
       el[0].scrollIntoView();
     }
@@ -318,15 +316,12 @@ td.leave {
   function updateNext() {
     const leaveCol = 0;
     const deptCol = 1;
-    var now = new Date();
-    var now_secs = now.getHours() * 3600 + now.getMinutes() * 60;
+    const now = new Date();
+    const now_secs = now.getHours() * 3600 + now.getMinutes() * 60;
+    const travelTime = document.getElementById('travel_time').value * 60;
+    const rows = document.getElementById('schedule').querySelector('tbody').querySelectorAll('tr');
 
-    travelTime = document.getElementById('travel_time').value * 60;
-
-    table = document.getElementById('schedule');
-    rows = table.querySelector('tbody').querySelectorAll('tr');
-
-    var count = 0;
+    let count = 0;
     for(const r of rows) {
       dt = parseInt(r.childNodes[deptCol].getAttribute('data-depart-time'));
       if (now_secs + travelTime < dt) {
@@ -356,13 +351,12 @@ td.leave {
 
   function highlightFast() {
     const durCol = 4;
-    table = document.getElementById('schedule');
-    rows = table.querySelector('tbody').querySelectorAll('tr');
-    var durations = [];
+    const rows = document.getElementById('schedule').querySelector('tbody').querySelectorAll('tr');
+    let durations = [];
     for (const r of rows) {
       durations.push(parseInt(r.childNodes[durCol].getAttribute('data-duration')));
     }
-    var fast = quantile(durations, 0.3);
+    const fast = quantile(durations, 0.3);
     for (const r of rows) {
       if (parseInt(r.childNodes[durCol].getAttribute('data-duration')) <= fast) {
         r.childNodes[durCol].classList.add('speed_fast');
@@ -370,7 +364,7 @@ td.leave {
     }
   }
 
-const asc = arr => arr.sort((a, b) => a - b);
+  const asc = arr => arr.sort((a, b) => a - b);
 
   function quantile(arr, q) {
     const sorted = asc(arr);
@@ -383,7 +377,6 @@ const asc = arr => arr.sort((a, b) => a - b);
         return sorted[base];
     }
   }
-
 </script>
 </body>
 </html>
