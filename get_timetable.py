@@ -16,9 +16,8 @@ class Line:
 
   @classmethod
   def getAll(cls):
-    #res = requests.get('{}/lines'.format(APIURL), params={'api_key': APIKEY, 'operator_id': OPERATOR, 'format': 'json'})
-    #js = json.loads(res.text.encode().decode('utf-8-sig'))
-    js = json.load(open('lines'))
+    res = requests.get('{}/lines'.format(APIURL), params={'api_key': APIKEY, 'operator_id': OPERATOR, 'format': 'json'})
+    js = json.loads(res.text.encode().decode('utf-8-sig'))
     return [Line(x) for x in js]
 
 
@@ -31,9 +30,8 @@ class StopPlace:
 
   @classmethod
   def getAll(cls):
-    #res = requests.get('{}/stopPlaces'.format(APIURL), params={'api_key': APIKEY, 'operator_id': OPERATOR, 'format': 'json'})
-    #js = json.loads(res.text.encode().decode('utf-8-sig'))
-    js = json.load(open('stopPlaces'))
+    res = requests.get('{}/stopPlaces'.format(APIURL), params={'api_key': APIKEY, 'operator_id': OPERATOR, 'format': 'json'})
+    js = json.loads(res.text.encode().decode('utf-8-sig'))
     return [StopPlace(x) for x in js['Siri']['ServiceDelivery']['DataObjectDelivery']['dataObjects']['SiteFrame']['stopPlaces']['StopPlace']]
 
   @classmethod
@@ -54,9 +52,8 @@ class Timetable:
 
   @classmethod
   def get(cls, line):
-    #res = requests.get('{}/timetable'.format(APIURL), params={'api_key': APIKEY, 'operator_id': OPERATOR, 'line_id': line, 'format': 'json'})
-    #js = json.loads(res.text.encode().decode('utf-8-sig'))
-    js = json.load(open('timetable.'+str(line)))
+    res = requests.get('{}/timetable'.format(APIURL), params={'api_key': APIKEY, 'operator_id': OPERATOR, 'line_id': line, 'format': 'json'})
+    js = json.loads(res.text.encode().decode('utf-8-sig'))
     return Timetable(js)
 
   def serviceJourneys(self, direction):
